@@ -2,8 +2,7 @@ name: Daily HawaHisaab Receipt
 
 on:
   schedule:
-    - cron: '0 3 * * *'   # 08:30 AM IST
-    - cron: '0 13 * * *'  # 06:30 PM IST
+    - cron: '0 * * * *'   # 08:30 AM IST
   workflow_dispatch:      # Manual trigger button in GitHub UI
 
 jobs:
