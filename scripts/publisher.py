@@ -3,9 +3,9 @@ import json
 import httpx
 
 def get_fresh_access_token() -> str:
-    client_id = os.environ["X_CLIENT_ID"]
-    client_secret = os.environ["X_CLIENT_SECRET"]
-    refresh_token = os.environ["X_REFRESH_TOKEN"]
+    client_id = os.environ["X_CLIENT_ID"].strip()
+    client_secret = os.environ["X_CLIENT_SECRET"].strip()
+    refresh_token = os.environ["X_REFRESH_TOKEN"].strip()
 
     resp = httpx.post(
         "https://api.x.com/2/oauth2/token",
@@ -40,21 +40,19 @@ def main():
         board_lines.append(f"{medal} {entry['city']}: {entry['cigs']} cigs ({entry['aqi']} AQI)")
     leaderboard_text = "\n".join(board_lines)
 
+    # Compact receipt strictly under 240 X-weighted characters
     caption = (
-        f"🧾 HAWA HISAAB | {data['timestamp']}\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"🚨 Top Offender: {data['city']} ({data['cigs_24h']} cigs/day)\n"
-        f"🌫️ Raw PM2.5: {data['raw_pm25']} µg/m³\n\n"
-        f"🚬 24-Hr National Lung Khata:\n"
-        f"{leaderboard_text}\n"
-        f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"💬 {data['status_roast']}\n\n"
+        f"🧾 HAWA HISAAB | {data['timestamp']}\n\n"
+        f"🚨 Worst: {data['city']} ({data['cigs_24h']} cigs/day)\n\n"
+        f"{leaderboard_text}\n\n"
         f"#HawaHisaab #{data['city']}AQI #IndiaAQI"
     )
 
+    print(f"Prepared tweet ({len(caption)} raw chars):\n{caption}\n")
+
     access_token = get_fresh_access_token()
 
-    tweet_resp = httpx.post(
+    resp = httpx.post(
         "https://api.x.com/2/tweets",
         headers={
             "Authorization": f"Bearer {access_token}",
@@ -62,12 +60,13 @@ def main():
         },
         json={"text": caption},
         timeout=15.0,
-    ).json()
+    )
 
-    if "data" not in tweet_resp:
-        raise RuntimeError(f"Failed to post tweet: {tweet_resp}")
+    tweet_resp = resp.json()
+    if resp.status_code != 201 or "data" not in tweet_resp:
+        raise RuntimeError(f"Failed to post tweet ({resp.status_code}): {tweet_resp}")
 
-    print("✅ Published Text Receipt Tweet:", tweet_resp)
+    print("✅ Published Receipt Tweet:", tweet_resp)
 
 if __name__ == "__main__":
     main()
