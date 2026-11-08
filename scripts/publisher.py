@@ -36,18 +36,16 @@ def main():
     board_lines = []
     for idx, entry in enumerate(data["leaderboard"], 1):
         medal = "🥇" if idx == 1 else "🥈" if idx == 2 else "🥉" if idx == 3 else "•"
-        board_lines.append(f"{medal} {entry['city']}: {entry['cigs']} cigs (AQI {entry['aqi']})")
+        board_lines.append(f"{medal} {entry['city']}: {entry['cigs']}c (AQI {entry['aqi']})")
     
     leaderboard_text = "\n".join(board_lines)
 
-    # Informative caption explaining that cigarette count is driven by PM2.5 density
+    # Ultra-compact caption guaranteed under 280 chars
     caption = (
         f"🧾 HAWA HISAAB | {data['timestamp']}\n\n"
-        f"🚨 Worst Air: {data['city']} ({data['cigs_24h']} passive cigs/day)\n"
-        f"💡 (Ranked by PM2.5 lung penetration: 22 µg/m³ = 1 cig)\n\n"
+        f"🚨 Worst: {data['city']} ({data['cigs_24h']} cigs/day | PM2.5 22µg=1c)\n\n"
         f"{leaderboard_text}\n\n"
-        f"💬 {data['status_roast']}\n\n"
-        f"#HawaHisaab #{data['city']}AQI #IndiaAQI"
+        f"#HawaHisaab #{data['city']}AQI"
     )
 
     print(f"Prepared tweet ({len(caption)} chars):\n{caption}\n")
@@ -68,7 +66,7 @@ def main():
     if resp.status_code != 201 or "data" not in tweet_resp:
         raise RuntimeError(f"Failed to post tweet ({resp.status_code}): {tweet_resp}")
 
-    print("✅ Published Informative Receipt Tweet:", tweet_resp)
+    print("✅ Published Compact Receipt Tweet:", tweet_resp)
 
 if __name__ == "__main__":
     main()
