@@ -1,0 +1,4 @@
+- name: 2. Render Static PNG & Animated Reel via Remotion
+        run: |
+          npm run render:png
+          npm run render:mp4
