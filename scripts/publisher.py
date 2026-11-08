@@ -1,7 +1,34 @@
 import os
 import json
-import tweepy
 import httpx
+
+def get_fresh_access_token() -> str:
+    client_id = os.environ["X_CLIENT_ID"]
+    client_secret = os.environ["X_CLIENT_SECRET"]
+    refresh_token = os.environ["X_REFRESH_TOKEN"]
+
+    resp = httpx.post(
+        "https://api.x.com/2/oauth2/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "client_id": client_id,
+        },
+        auth=(client_id, client_secret),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=15.0,
+    ).json()
+
+    if "access_token" not in resp:
+        raise RuntimeError(f"OAuth2 Token Refresh Failed: {resp}")
+
+    # Pass the new refresh token to the next GitHub Actions step so it updates the secret
+    gh_env = os.getenv("GITHUB_ENV")
+    if gh_env and "refresh_token" in resp:
+        with open(gh_env, "a") as f:
+            f.write(f"NEW_X_REFRESH_TOKEN={resp['refresh_token']}\n")
+
+    return resp["access_token"]
 
 def main():
     with open("receipt_props.json") as f:
@@ -14,46 +41,33 @@ def main():
     leaderboard_text = "\n".join(board_lines)
 
     caption = (
-        f"🧾 AAJ KA HAWA HISAAB ({data['timestamp']})\n\n"
-        f"{data['city']} tops the Lung Khata today at {data['cigs_24h']} passive cigarettes/day.\n\n"
-        f"🚬 24-Hr National Standings:\n"
-        f"{leaderboard_text}\n\n"
+        f"🧾 HAWA HISAAB | {data['timestamp']}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"🚨 Top Offender: {data['city']} ({data['cigs_24h']} cigs/day)\n"
+        f"🌫️ Raw PM2.5: {data['raw_pm25']} µg/m³\n\n"
+        f"🚬 24-Hr National Lung Khata:\n"
+        f"{leaderboard_text}\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💬 {data['status_roast']}\n\n"
-        f"#HawaHisaab #{data['city']}AQI #IndiaAQI #AirPollution"
+        f"#HawaHisaab #{data['city']}AQI #IndiaAQI"
     )
 
-    # 1. Publish to X
-    auth = tweepy.OAuth1UserHandler(
-        os.getenv("X_API_KEY"), os.getenv("X_API_SECRET"),
-        os.getenv("X_ACCESS_TOKEN"), os.getenv("X_ACCESS_SECRET")
-    )
-    api_v1 = tweepy.API(auth)
-    client_v2 = tweepy.Client(
-        consumer_key=os.getenv("X_API_KEY"),
-        consumer_secret=os.getenv("X_API_SECRET"),
-        access_token=os.getenv("X_ACCESS_TOKEN"),
-        access_token_secret=os.getenv("X_ACCESS_SECRET")
-    )
+    access_token = get_fresh_access_token()
 
-    media = api_v1.media_upload(filename="out/receipt.png")
-    client_v2.create_tweet(text=caption, media_ids=[media.media_id])
+    tweet_resp = httpx.post(
+        "https://api.x.com/2/tweets",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        json={"text": caption},
+        timeout=15.0,
+    ).json()
 
-    # 2. Publish to Instagram (Optional)
-    ig_user_id = os.getenv("IG_USER_ID")
-    ig_token = os.getenv("IG_ACCESS_TOKEN")
-    public_png_url = os.getenv("PUBLIC_PNG_URL", "").strip()
+    if "data" not in tweet_resp:
+        raise RuntimeError(f"Failed to post tweet: {tweet_resp}")
 
-    if ig_user_id and ig_token and public_png_url:
-        base_url = f"https://graph.facebook.com/v21.0/{ig_user_id}"
-        container = httpx.post(
-            f"{base_url}/media",
-            params={"image_url": public_png_url, "caption": caption, "access_token": ig_token}
-        ).json()
-        if "id" in container:
-            httpx.post(
-                f"{base_url}/media_publish",
-                params={"creation_id": container["id"], "access_token": ig_token}
-            )
+    print("✅ Published Text Receipt Tweet:", tweet_resp)
 
 if __name__ == "__main__":
     main()
