@@ -1,4 +1,42 @@
-- name: 2. Render Static PNG & Animated Reel via Remotion
-        run: |
-          npm run render:png
-          npm run render:mp4
+name: Daily HawaHisaab Receipt
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 08:30 AM IST
+    - cron: '0 13 * * *'  # 06:30 PM IST
+  workflow_dispatch:      # Manual trigger button in GitHub UI
+
+jobs:
+  fetch-and-post:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install httpx
+
+      - name: 1. Fetch Live AQI & Generate Props JSON
+        env:
+          WAQI_TOKEN: ${{ secrets.WAQI_TOKEN }}
+        run: python scripts/fetcher.py
+
+      - name: 2. Publish Text Receipt to X (OAuth 2.0)
+        env:
+          X_CLIENT_ID: ${{ secrets.X_CLIENT_ID }}
+          X_CLIENT_SECRET: ${{ secrets.X_CLIENT_SECRET }}
+          X_REFRESH_TOKEN: ${{ secrets.X_REFRESH_TOKEN }}
+        run: python scripts/publisher.py
+
+      - name: 3. Save Rotated X Refresh Token to GitHub Secrets
+        if: always() && env.NEW_X_REFRESH_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          NEW_TOKEN: ${{ env.NEW_X_REFRESH_TOKEN }}
+        run: gh secret set X_REFRESH_TOKEN --body "$NEW_TOKEN"
